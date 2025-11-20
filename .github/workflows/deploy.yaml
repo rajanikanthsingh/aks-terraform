@@ -18,6 +18,7 @@ jobs:
       ARM_CLIENT_SECRET: ${{ secrets.AKSTERRAFORM_CLIENT_SECRET }}
       TF_VAR_db_password: ${{ secrets.AKSTERRAFORM_DB_PASSWORD }}
       TF_VAR_github_actions_client_id: ${{ secrets.AKSTERRAFORM_CLIENT_ID }}
+      TF_VAR_node_size: standard_dc2s_v3
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -27,9 +28,48 @@ jobs:
         with:
           terraform_version: 1.6.0
 
+      - name: Login to Azure
+        run: |
+          az login --service-principal -u ${{ secrets.AKSTERRAFORM_CLIENT_ID }} \
+                           -p ${{ secrets.AKSTERRAFORM_CLIENT_SECRET }} \
+                           --tenant ${{ secrets.AKSTERRAFORM_TENANT_ID }}
+
+      - name: Delete partially created Resource Group (safe for rerun)
+        run: |
+          set -euo pipefail
+          if az group show -n rg-aks-demo &>/dev/null; then
+            echo "Deleting resource group rg-aks-demo..."
+            az group delete -n rg-aks-demo --yes --no-wait
+          else
+            echo "Resource group 'rg-aks-demo' not found; skipping delete."
+          fi
+
+      - name: Clean orphan Key Vault access policy (idempotent)
+        run: |
+          set -euo pipefail
+          # Only attempt cleanup if the Key Vault exists
+          if az keyvault show --name kvaksdemo --resource-group rg-aks-demo &>/dev/null; then
+            echo "Key Vault 'kvaksdemo' exists — attempting to remove access policy for this SP (if present)"
+            OBJECT_ID=$(az ad sp show --id "${{ secrets.AKSTERRAFORM_CLIENT_ID }}" --query objectId -o tsv || echo "")
+            if [ -n "$OBJECT_ID" ]; then
+              echo "Removing access policy for object id: $OBJECT_ID"
+              az keyvault delete-policy --name kvaksdemo --object-id "$OBJECT_ID" || echo "No existing policy or deletion failed (continuing)"
+            else
+              echo "Could not resolve service principal object id; skipping delete-policy."
+            fi
+          else
+            echo "Key Vault 'kvaksdemo' not found in 'rg-aks-demo' — skipping access policy cleanup."
+          fi
+
+          # Also ensure no local stale state exists on the runner
+          echo "Cleaning terraform working directory on runner..."
+          rm -rf terraform/.terraform || true
+          rm -f terraform/.terraform.lock.hcl || true
+          rm -f terraform/terraform.tfstate terraform/terraform.tfstate.backup || true
+
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init
+        run: terraform init -reconfigure
 
       - name: Terraform Plan
         working-directory: terraform
@@ -89,6 +129,9 @@ jobs:
     env:
       ACR_USERNAME: ${{ secrets.AKSTERRAFORM_ACR_USERNAME }}
       ACR_PASSWORD: ${{ secrets.AKSTERRAFORM_ACR_PASSWORD }}
+      AKS_NAME: ${{ env.AKS_NAME }}
+      RG_NAME: ${{ env.RG_NAME }}
+      ACR_LOGIN_SERVER: ${{ env.ACR_LOGIN_SERVER }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -111,24 +154,21 @@ jobs:
       - name: Docker login to ACR
         uses: azure/docker-login@v1
         with:
-          login-server: ${{ env.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.AKSTERRAFORM_ACR_USERNAME }}
-          password: ${{ secrets.AKSTERRAFORM_ACR_PASSWORD }}
+          login-server: $ACR_LOGIN_SERVER
+          username: $ACR_USERNAME
+          password: $ACR_PASSWORD
 
       - name: Build Docker image
         run: |
-          IMAGE_TAG=${{ env.ACR_LOGIN_SERVER }}/myapp:${{ github.sha }}
+          IMAGE_TAG=$ACR_LOGIN_SERVER/myapp:${{ github.sha }}
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           docker build -t $IMAGE_TAG .
 
       - name: Push Docker image
-        run: |
-          docker push $IMAGE_TAG
+        run: docker push $IMAGE_TAG
 
       - name: Update Kubernetes deployment with new image
-        run: |
-          sed -i "s|{{IMAGE}}|$IMAGE_TAG|g" k8s/deployment.yaml
+        run: sed -i "s|{{IMAGE}}|$IMAGE_TAG|g" k8s/deployment.yaml
 
       - name: Apply Kubernetes manifests
-        run: |
-          kubectl apply -f k8s/
+        run: kubectl apply -f k8s/
