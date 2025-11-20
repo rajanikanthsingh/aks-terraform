@@ -120,6 +120,7 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AKSTERRAFORM_CLIENT_SECRET }}
       AZURE_TENANT_ID: ${{ secrets.AKSTERRAFORM_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AKSTERRAFORM_SUBSCRIPTION_ID }}
+      KEY_VAULT_URI: ${{ needs.terraform.outputs.key_vault_uri }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -135,10 +136,23 @@ jobs:
               "tenantId": "${{ secrets.AKSTERRAFORM_TENANT_ID }}"
             }
 
+      - name: Derive Key Vault name from Terraform output
+        run: |
+          set -euo pipefail
+          if [ -n "${KEY_VAULT_URI:-}" ]; then
+            # Strip protocol and domain to get vault name (e.g. https://kvaksdemo.vault.azure.net/ -> kvaksdemo)
+            KV_NAME=${KEY_VAULT_URI#https://}
+            KV_NAME=${KV_NAME%%.*}
+            echo "Derived Key Vault name: $KV_NAME"
+            echo "KEYVAULT_NAME=$KV_NAME" >> $GITHUB_ENV
+          else
+            echo "KEY_VAULT_URI is empty; falling back to secret AKSTERRAFORM_KEYVAULT_NAME if present"
+          fi
+
       - name: Fetch secrets from Key Vault
         uses: Azure/get-keyvault-secrets@v1
         with:
-          keyvault: ${{ secrets.AKSTERRAFORM_KEYVAULT_NAME }}
+          keyvault: ${{ env.KEYVAULT_NAME || secrets.AKSTERRAFORM_KEYVAULT_NAME }}
           secrets: db-password  # Add other secret names as needed
 
       - name: Set secrets as env variables
