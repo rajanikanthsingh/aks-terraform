@@ -30,7 +30,7 @@ variable "node_count" {
 
 variable "node_size" {
   type    = string
-  default = "standard_dc32s_v3"
+  default = "standard_dc2s_v3"
 }
 
 # This value comes from GitHub Actions
