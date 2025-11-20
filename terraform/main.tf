@@ -10,7 +10,7 @@ resource "azurerm_resource_group" "rg" {
 # Azure Container Registry
 ##############################
 resource "azurerm_container_registry" "acr" {
-  name                = "acraksdemo-unique123" # Updated to a globally unique name
+  name                = "acraksdemounique123 " # Updated to a globally unique name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku                 = "Basic"
