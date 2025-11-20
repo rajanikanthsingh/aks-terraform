@@ -1,30 +1,33 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo-app
-  namespace: default
+  name: myapp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: demo
+      app: myapp
   template:
     metadata:
       labels:
-        app: demo
+        app: myapp
     spec:
+      containers:
+      - name: myapp
+        image: "{{IMAGE}}"                 # GitHub Actions replaces this dynamically
+        ports:
+        - containerPort: 80
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-password           # Created by SecretProviderClass sync
+              key: password
       volumes:
-      - name: secrets-store
+      - name: secrets-store-inline
         csi:
           driver: secrets-store.csi.k8s.io
           readOnly: true
           volumeAttributes:
-            secretProviderClass: azure-kv-secrets
+            secretProviderClass: "kv-secrets"
 
-      containers:
-      - name: demo
-        image: IMAGE_PLACEHOLDER
-        volumeMounts:
-        - name: secrets-store
-          mountPath: "/mnt/secrets-store"
-          readOnly: true
