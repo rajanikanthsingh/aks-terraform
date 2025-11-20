@@ -36,6 +36,7 @@ resource "azurerm_key_vault_secret" "db" {
   name         = "db-password"
   value        = var.db_password                  # from GitHub Actions
   key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [azurerm_key_vault_access_policy.gha]
 }
 
 ##############################
