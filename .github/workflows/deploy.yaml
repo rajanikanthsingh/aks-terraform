@@ -79,15 +79,33 @@ jobs:
       - name: Terraform Plan
         working-directory: terraform
         run: terraform plan
+          run: |
+            set -euo pipefail
+            ACR_OUT=$(terraform output -raw acr_login_server)
+            KV_OUT=$(terraform output -raw key_vault_uri)
+            AKS_OUT=$(terraform output -raw aks_name)
+            RG_OUT=$(terraform output -raw rg_name)
 
-      - name: Terraform Apply
-        working-directory: terraform
-        run: terraform apply -auto-approve
-
+            # Use the GITHUB_OUTPUT heredoc format to safely write values
+            echo "acr_login_server<<EOF" >> $GITHUB_OUTPUT
+            printf '%s
       - name: Capture Terraform outputs
+            echo "EOF" >> $GITHUB_OUTPUT
+
+            echo "key_vault_uri<<EOF" >> $GITHUB_OUTPUT
+            printf '%s
         working-directory: terraform
+            echo "EOF" >> $GITHUB_OUTPUT
+
+            echo "aks_name<<EOF" >> $GITHUB_OUTPUT
+            printf '%s
         id: tf_output
+            echo "EOF" >> $GITHUB_OUTPUT
+
+            echo "rg_name<<EOF" >> $GITHUB_OUTPUT
+            printf '%s
         run: |
+            echo "EOF" >> $GITHUB_OUTPUT
           echo "acr_login_server=$(terraform output -raw acr_login_server)" >> $GITHUB_OUTPUT
           echo "key_vault_uri=$(terraform output -raw key_vault_uri)" >> $GITHUB_OUTPUT
           echo "aks_name=$(terraform output -raw aks_name)" >> $GITHUB_OUTPUT
