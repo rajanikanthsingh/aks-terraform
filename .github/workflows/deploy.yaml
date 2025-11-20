@@ -11,6 +11,11 @@ jobs:
   terraform:
     name: Terraform Apply
     runs-on: ubuntu-latest
+    outputs:
+      acr_login_server: ${{ steps.tf_output.outputs.acr_login_server }}
+      key_vault_uri: ${{ steps.tf_output.outputs.key_vault_uri }}
+      aks_name: ${{ steps.tf_output.outputs.aks_name }}
+      rg_name: ${{ steps.tf_output.outputs.rg_name }}
     env:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AKSTERRAFORM_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AKSTERRAFORM_TENANT_ID }}
@@ -83,10 +88,10 @@ jobs:
         working-directory: terraform
         id: tf_output
         run: |
-          echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> $GITHUB_ENV
-          echo "KEY_VAULT_URI=$(terraform output -raw key_vault_uri)" >> $GITHUB_ENV
-          echo "AKS_NAME=$(terraform output -raw aks_name)" >> $GITHUB_ENV
-          echo "RG_NAME=$(terraform output -raw rg_name)" >> $GITHUB_ENV
+          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> $GITHUB_OUTPUT
+          echo "key_vault_uri=$(terraform output -raw key_vault_uri)" >> $GITHUB_OUTPUT
+          echo "aks_name=$(terraform output -raw aks_name)" >> $GITHUB_OUTPUT
+          echo "rg_name=$(terraform output -raw rg_name)" >> $GITHUB_OUTPUT
 
   fetch-secrets:
     name: Fetch Key Vault Secrets
@@ -129,9 +134,9 @@ jobs:
     env:
       ACR_USERNAME: ${{ secrets.AKSTERRAFORM_ACR_USERNAME }}
       ACR_PASSWORD: ${{ secrets.AKSTERRAFORM_ACR_PASSWORD }}
-      AKS_NAME: ${{ env.AKS_NAME }}
-      RG_NAME: ${{ env.RG_NAME }}
-      ACR_LOGIN_SERVER: ${{ env.ACR_LOGIN_SERVER }}
+      AKS_NAME: ${{ needs.terraform.outputs.aks_name }}
+      RG_NAME: ${{ needs.terraform.outputs.rg_name }}
+      ACR_LOGIN_SERVER: ${{ needs.terraform.outputs.acr_login_server }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
