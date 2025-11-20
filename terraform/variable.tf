@@ -10,7 +10,7 @@ variable "rg_name" {
 
 variable "acr_name" {
   type    = string
-  default = "acraksdemo"
+  default = "acraksdemounique123"
 }
 
 variable "key_vault_name" {
