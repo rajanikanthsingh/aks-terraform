@@ -87,7 +87,12 @@ jobs:
           if [ -n "${TF_BACKEND_STORAGE_ACCOUNT:-}" ]; then ARGS="$ARGS -backend-config=storage_account_name=${TF_BACKEND_STORAGE_ACCOUNT}"; fi
           if [ -n "${TF_BACKEND_CONTAINER:-}" ]; then ARGS="$ARGS -backend-config=container_name=${TF_BACKEND_CONTAINER}"; fi
           if [ -n "${TF_BACKEND_KEY:-}" ]; then ARGS="$ARGS -backend-config=key=${TF_BACKEND_KEY}"; fi
-          if [ -n "${TF_BACKEND_ACCESS_KEY:-}" ]; then ARGS="$ARGS -backend-config=access_key=${TF_BACKEND_ACCESS_KEY}"; fi
+          if [ -n "${TF_BACKEND_ACCESS_KEY:-}" ]; then
+            ARGS="$ARGS -backend-config=access_key=${TF_BACKEND_ACCESS_KEY}"
+          else
+            # If no access key supplied, fall back to Azure AD auth (requires az login earlier in the job)
+            ARGS="$ARGS -backend-config=use_azuread_auth=true"
+          fi
           echo "Running: terraform init $ARGS"
           terraform init $ARGS
 
