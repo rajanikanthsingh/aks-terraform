@@ -76,6 +76,20 @@ jobs:
         working-directory: terraform
         run: terraform init -reconfigure
 
+      - name: Try importing existing Resource Group (idempotent)
+        working-directory: terraform
+        run: |
+          set -euo pipefail
+          # Only attempt import if the resource group exists in the subscription
+          if az group show -n rg-aks-demo &>/dev/null; then
+            SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+            RG_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/rg-aks-demo"
+            echo "Attempting to import existing resource group: $RG_ID"
+            terraform import azurerm_resource_group.rg "$RG_ID" || echo "Import failed or already imported (continuing)"
+          else
+            echo "Resource group 'rg-aks-demo' does not exist; skipping import."
+          fi
+
       - name: Terraform Plan
         working-directory: terraform
         run: terraform plan
