@@ -90,6 +90,48 @@ jobs:
             echo "Resource group 'rg-aks-demo' does not exist; skipping import."
           fi
 
+      - name: Try importing existing Key Vault, ACR, and AKS (idempotent)
+        working-directory: terraform
+        run: |
+          set -euo pipefail
+          RG_NAME="rg-aks-demo"
+          if az group show -n "$RG_NAME" &>/dev/null; then
+            SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+            # Key Vault
+            KV_NAME=$(az keyvault list -g "$RG_NAME" --query "[0].name" -o tsv || echo "")
+            if [ -n "$KV_NAME" ]; then
+              KV_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.KeyVault/vaults/${KV_NAME}"
+              echo "Attempting to import Key Vault: $KV_ID"
+              terraform import azurerm_key_vault.kv "$KV_ID" || echo "Key Vault import failed or already imported (continuing)"
+            else
+              echo "No Key Vault found in ${RG_NAME}; skipping Key Vault import."
+            fi
+
+            # Azure Container Registry
+            ACR_NAME=$(az acr list -g "$RG_NAME" --query "[0].name" -o tsv || echo "")
+            if [ -n "$ACR_NAME" ]; then
+              ACR_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerRegistry/registries/${ACR_NAME}"
+              echo "Attempting to import ACR: $ACR_ID"
+              terraform import azurerm_container_registry.acr "$ACR_ID" || echo "ACR import failed or already imported (continuing)"
+            else
+              echo "No ACR found in ${RG_NAME}; skipping ACR import."
+            fi
+
+            # AKS Cluster
+            AKS_NAME=$(az aks list -g "$RG_NAME" --query "[0].name" -o tsv || echo "")
+            if [ -n "$AKS_NAME" ]; then
+              AKS_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerService/managedClusters/${AKS_NAME}"
+              echo "Attempting to import AKS: $AKS_ID"
+              terraform import azurerm_kubernetes_cluster.aks "$AKS_ID" || echo "AKS import failed or already imported (continuing)"
+            else
+              echo "No AKS cluster found in ${RG_NAME}; skipping AKS import."
+            fi
+
+          else
+            echo "Resource group '${RG_NAME}' does not exist; skipping resource imports."
+          fi
+
       - name: Terraform Plan
         working-directory: terraform
         run: terraform plan
